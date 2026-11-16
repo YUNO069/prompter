@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#101113">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Prompter">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23101113'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23ff4b3e'/%3E%3C/svg%3E">
+<style>body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+<title>Prompter Werkstatt</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: Kopfzeile, darunter eine Ansicht (Ideen-Übersicht, Idee lesen, Idee bearbeiten).
+   Der Teleprompter legt sich als Vollbild-Ebene darüber. Rot = Aufnahme-Lämpchen, die einzige Akzentfarbe. */
+:root{
+  --bg:#f2f3f5; --panel:#ffffff; --soft:#e9ebef; --line:#d9dce2; --stage:#ffffff;
+  --fg:#15171b; --muted:#5b616b; --dim:#a2a7b0; --tally:#de3428; --on-tally:#ffffff;
+  --scrim:rgba(242,243,245,.82); --shadow:0 1px 2px rgba(20,24,30,.05),0 10px 30px rgba(20,24,30,.07);
+  --f-read:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
+  --f-ui:"Space Grotesk","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --size:48px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]):not([data-look="light"]){
+    --bg:#101113; --panel:#181a1e; --soft:#1e2125; --line:#2b2e34; --stage:#050506;
+    --fg:#f3f1ea; --muted:#8e929b; --dim:#5c6068; --tally:#ff4b3e; --on-tally:#ffffff;
+    --scrim:rgba(5,5,6,.75); --shadow:none; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101113; --panel:#181a1e; --soft:#1e2125; --line:#2b2e34; --stage:#050506;
+  --fg:#f3f1ea; --muted:#8e929b; --dim:#5c6068; --tally:#ff4b3e; --on-tally:#ffffff;
+  --scrim:rgba(5,5,6,.75); --shadow:none; color-scheme:dark;
+}
+/* Eigene Wahl auf der Seite schlägt System und App-Einstellung */
+:root[data-look="dark"]{
+  --bg:#101113; --panel:#181a1e; --soft:#1e2125; --line:#2b2e34; --stage:#050506;
+  --fg:#f3f1ea; --muted:#8e929b; --dim:#5c6068; --tally:#ff4b3e; --on-tally:#ffffff;
+  --scrim:rgba(5,5,6,.75); --shadow:none; color-scheme:dark;
+}
+:root[data-look="light"]{
+  --bg:#f2f3f5; --panel:#ffffff; --soft:#e9ebef; --line:#d9dce2; --stage:#ffffff;
+  --fg:#15171b; --muted:#5b616b; --dim:#a2a7b0; --tally:#de3428; --on-tally:#ffffff;
+  --scrim:rgba(242,243,245,.82); --shadow:0 1px 2px rgba(20,24,30,.05),0 10px 30px rgba(20,24,30,.07);
+  color-scheme:light;
+}
+
+[hidden]{display:none!important}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-ui);font-size:14px}
+body.locked{overflow:hidden}
+.gutter{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1120px;margin:0 auto}
+h1,h2,h3{text-wrap:balance;margin:0}
+button,input,textarea{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,textarea:focus-visible,.drop:focus-within{outline:2px solid var(--tally);outline-offset:2px}
+
+/* Kopfzeile */
+.top{border-bottom:1px solid var(--line);background:var(--bg)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding-block:12px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px;background:none;border:0;padding:0;cursor:pointer}
+.tally-dot{width:10px;height:10px;border-radius:50%;background:var(--tally)}
+.store-note{color:var(--muted);font-size:12px}
+.look{margin-left:auto;display:flex;gap:2px;background:var(--soft);padding:3px;border-radius:9px}
+.look button{border:0;background:transparent;color:var(--muted);padding:6px 11px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500}
+.look button[aria-pressed="true"]{background:var(--panel);color:var(--fg);box-shadow:var(--shadow)}
+
+/* Knöpfe */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font-weight:500;padding:9px 15px;border-radius:9px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--tally);border-color:var(--tally);color:var(--on-tally)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.quiet{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.quiet:hover{color:var(--fg)}
+.btn.danger{background:transparent;color:var(--tally);border-color:transparent}
+.btn.danger.armed{border-color:var(--tally)}
+.btn[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.big{padding:12px 22px;font-size:15px}
+
+/* Übersicht */
+.page{padding-block:28px 56px}
+.head{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px 20px;margin-bottom:22px}
+.head h1{font-size:clamp(26px,4vw,36px);font-weight:700;letter-spacing:-.01em}
+.head p{margin:6px 0 0;color:var(--muted);font-size:14px}
+.headbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.card{display:flex;flex-direction:column;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;padding:0;box-shadow:var(--shadow);transition:transform .15s,border-color .15s}
+.card:hover{transform:translateY(-2px);border-color:var(--muted)}
+.thumb{position:relative;aspect-ratio:16/10;background:var(--soft);overflow:hidden;max-width:100%}
+.thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.ph{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:9px;padding:0 22%}
+.ph i{display:block;height:7px;border-radius:4px;background:var(--line)}
+.ph i:nth-child(2){width:86%}.ph i:nth-child(3){width:64%}
+.ph i.mark{background:var(--tally);opacity:.8;width:72%}
+.card .body{display:flex;flex-direction:column;gap:6px;padding:14px 16px 16px;min-width:0}
+.card h3{font-size:17px;font-weight:600;line-height:1.25}
+.card p{margin:0;color:var(--muted);font-family:var(--f-read);font-size:14px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta{color:var(--muted);font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums}
+.card .meta{margin-top:4px}
+.empty{grid-column:1/-1;border:1.5px dashed var(--line);border-radius:14px;padding:40px 24px;text-align:center;color:var(--muted);display:grid;gap:14px;justify-items:center}
+.empty h2{color:var(--fg);font-size:20px}
+.empty p{margin:0;max-width:44ch;line-height:1.5}
+.loading{grid-column:1/-1;color:var(--muted);padding:30px 0}
+.alert{color:var(--tally);font-size:13px;margin:0 0 14px}
+
+/* Idee lesen */
+.back{margin-bottom:18px}
+.idea{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:32px;align-items:start}
+.idea h1{font-size:clamp(26px,4vw,38px);font-weight:700;letter-spacing:-.01em;margin-bottom:8px}
+.reading{font-family:var(--f-read);font-size:19px;line-height:1.65;max-width:65ch}
+.reading p{margin:0 0 1em}
+.reading .none{color:var(--muted);font-style:italic}
+.aside{position:sticky;top:16px;display:grid;gap:12px}
+.aside .thumb{border-radius:12px;border:1px solid var(--line)}
+.aside .actions{display:grid;gap:8px}
+.aside .actions .btn{width:100%}
+.aside .meta{text-align:center}
+
+/* Bearbeiten */
+.form{display:grid;gap:18px;max-width:820px}
+.field{display:grid;gap:6px}
+.field label,.lbl{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.field input[type="text"]{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:20px;font-weight:600}
+.field textarea{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font:18px/1.6 var(--f-read);min-height:44vh;resize:vertical;box-sizing:border-box;width:100%}
+.hint-s{color:var(--muted);font-size:13px;margin:0}
+.imgrow{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.drop{position:relative;width:220px;max-width:100%;aspect-ratio:16/10;border:1.5px dashed var(--line);border-radius:12px;overflow:hidden;background:var(--soft);display:grid;place-items:center;cursor:pointer;color:var(--muted);font-size:13px;text-align:center}
+.drop:hover{border-color:var(--muted)}
+.drop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.formbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.formbar .msg{color:var(--tally);font-size:13px}
+
+/* Start-Auswahl */
+.dialog{position:fixed;inset:0;z-index:60;background:var(--scrim);display:grid;place-items:center;padding-block:20px;backdrop-filter:blur(4px)}
+.dialog .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);width:min(640px,100%);padding:22px;display:grid;gap:16px}
+.dialog h2{font-size:20px}
+.dialog .sub{margin:0;color:var(--muted)}
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.choice{display:grid;gap:10px;text-align:left;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:12px;cursor:pointer}
+.choice:hover{border-color:var(--tally)}
+.choice b{font-size:16px;font-weight:600}
+.choice span{color:var(--muted);font-size:13px;line-height:1.4}
+.choice em{font-style:normal;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--tally)}
+.mini{position:relative;aspect-ratio:16/10;border-radius:8px;background:var(--stage);border:1px solid var(--line);overflow:hidden}
+.mini .ln{position:absolute;left:18%;right:18%;height:6px;border-radius:3px;background:var(--dim)}
+.mini .mk{position:absolute;width:0;height:0;border:6px solid transparent}
+.mini .cam{position:absolute;top:6px;left:50%;width:8px;height:8px;margin-left:-4px;border-radius:50%;border:2px solid var(--muted)}
+.dialog .foot{display:flex;justify-content:flex-end}
+
+/* Teleprompter */
+.prompter{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+.pbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:10px;border-bottom:1px solid var(--line)}
+.pgroup{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ptitle{font-weight:600;max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg{display:flex;gap:2px;background:var(--soft);padding:3px;border-radius:9px}
+.seg button{border:0;background:transparent;color:var(--muted);padding:6px 11px;border-radius:7px;cursor:pointer;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--fg);box-shadow:var(--shadow)}
+.range{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
+.range input{accent-color:var(--tally);width:110px}
+.val{font-family:var(--f-mono);color:var(--fg);font-size:13px;min-width:3ch;font-variant-numeric:tabular-nums}
+.check{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer}
+.check input{accent-color:var(--tally)}
+.pbar .meta{margin-left:auto}
+.prompter.playing .btn.play{background:transparent;color:var(--tally)}
+
+.stage{position:relative;flex:1;min-height:300px;overflow:hidden;background:var(--stage);touch-action:none;cursor:pointer;user-select:none;-webkit-user-select:none}
+.view{position:absolute;inset:0;overflow:hidden}
+.track{position:absolute;left:0;right:0;top:0;will-change:transform}
+.text{margin:0 auto;max-width:min(100%,24em);font-family:var(--f-read);font-weight:700;font-size:var(--size);line-height:1.35;color:var(--fg)}
+.text p{margin:0 0 .9em}
+.fade-top{position:absolute;left:0;right:0;top:0;background:linear-gradient(var(--stage) 0%,var(--stage) 20%,transparent);opacity:.82;pointer-events:none}
+.guide{position:absolute;left:0;right:0;height:0;pointer-events:none}
+.guide::before,.guide::after{content:"";position:absolute;top:-9px;border:9px solid transparent}
+.guide::before{left:max(6px,env(safe-area-inset-left,0px));border-left:14px solid var(--tally)}
+.guide::after{right:max(6px,env(safe-area-inset-right,0px));border-right:14px solid var(--tally)}
+.stage[data-v="kamera"] .view{bottom:auto;top:30px;height:min(40%,320px);border-bottom:1px solid var(--line);
+  -webkit-mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent);mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent)}
+.stage[data-v="kamera"] .text{font-size:calc(var(--size)*.72);max-width:min(100%,22em);text-align:center}
+.stage[data-v="kamera"] .fade-top{display:none}
+.camtag{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;color:var(--dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase;pointer-events:none}
+.camtag i{width:12px;height:12px;border-radius:50%;border:2px solid var(--muted)}
+.note{position:absolute;left:0;right:0;bottom:56px;text-align:center;color:var(--dim);font-size:14px;line-height:1.5;pointer-events:none;margin:0}
+.note b{color:var(--muted);font-weight:500}
+.stage.mirror .text{transform:scaleX(-1)}
+.countdown{position:absolute;inset:0;display:grid;place-items:center;background:var(--scrim);color:var(--tally);font-family:var(--f-mono);font-size:min(34vmin,220px);font-variant-numeric:tabular-nums;pointer-events:none}
+.progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--line)}
+.progress span{display:block;height:100%;width:0;background:var(--tally)}
+.phint{position:absolute;left:0;right:0;bottom:12px;color:var(--dim);font-size:12px;text-align:center;pointer-events:none;margin:0}
+.phint kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--muted)}
+.prompter.playing .phint{opacity:0;transition:opacity .4s}
+.stage:fullscreen{min-height:100vh}
+
+/* Anmeldung */
+.login{justify-items:stretch;max-width:420px;margin:0 auto;text-align:left}
+.login h2,.login p{text-align:center}
+.login input{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:17px;color:var(--fg)}
+.login .msg{color:var(--tally);min-height:1.2em;margin:0}
+.btn.small{padding:5px 10px;font-size:12px}
+
+/* Akku */
+.batt{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.batt i{position:relative;display:inline-block;width:24px;height:12px;border:1.5px solid currentColor;border-radius:3px;box-sizing:border-box}
+.batt i::after{content:"";position:absolute;right:-4px;top:3px;width:2px;height:4px;background:currentColor;border-radius:0 1px 1px 0}
+.batt i b{position:absolute;left:1px;top:1px;bottom:1px;border-radius:1px;background:currentColor}
+.batt.low{color:var(--tally)}
+.batt.charging{color:var(--fg)}
+
+/* Nur in der Tablet-App */
+.gear{font-size:20px;padding:6px 10px}
+.admgrid{display:grid;gap:10px}
+.pin{font:600 24px/1.2 var(--f-mono);letter-spacing:.3em;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);width:100%;box-sizing:border-box}
+.admgrid .btn{width:100%}
+.admgrid .formbar .btn{width:auto}
+
+@media (max-width:820px){
+  .idea{grid-template-columns:minmax(0,1fr)}
+  .aside{position:static;order:-1}
+}
+@media (max-width:560px){
+  .choices{grid-template-columns:1fr}
+  .pbar .meta{margin-left:0;width:100%}
+  .range input{width:84px}
+  .phint{display:none}
+  .look{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top gutter">
+  <div class="wrap">
+    <button class="brand" id="homeBtn"><span class="tally-dot" aria-hidden="true"></span>Prompter Werkstatt</button>
+    <span class="store-note" id="storeNote">Lädt …</span>
+    <button class="btn quiet small" id="logoutBtn" hidden>Abmelden</button>
+    <span class="batt" id="batt" hidden aria-live="polite"></span>
+    <div class="look" role="group" aria-label="Darstellung">
+      <button data-look="light" aria-pressed="false">Hell</button>
+      <button data-look="dark" aria-pressed="false">Dunkel</button>
+      <button data-look="auto" aria-pressed="false">Automatisch</button>
+    </div>
+    <button class="btn quiet gear" id="adminBtn" hidden aria-label="Tablet-Einstellungen" title="Tablet-Einstellungen">⚙</button>
+  </div>
+</header>
+
+<!-- Übersicht -->
+<main class="gutter" id="homeView">
+  <div class="wrap page">
+    <div class="head">
+      <div>
+        <h1>Deine Ideen</h1>
+        <p>Jede Karte ist ein Video: Titel, Sprechtext und wenn du willst ein Thumbnail.</p>
+      </div>
+      <div class="headbtns">
+        <button class="btn quiet" id="exportBtn" hidden title="Alle Ideen als Datei speichern">Sicherung speichern</button>
+        <button class="btn quiet" id="importBtn" hidden title="Ideen aus einer Sicherungsdatei laden">Sicherung laden</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+        <button class="btn primary big" id="newBtn">+ Neue Idee</button>
+      </div>
+    </div>
+    <p class="alert" id="loadAlert" hidden></p>
+    <div class="grid" id="grid"><p class="loading">Deine Ideen werden geladen …</p></div>
+  </div>
+</main>
+
+<!-- Idee lesen -->
+<main class="gutter" id="ideaView" hidden>
+  <div class="wrap page">
+    <button class="btn quiet back" data-go="home">← Alle Ideen</button>
+    <div class="idea">
+      <article>
+        <h1 id="ideaTitle"></h1>
+        <p class="meta" id="ideaMeta"></p>
+        <div class="reading" id="ideaText"></div>
+      </article>
+      <aside class="aside">
+        <div class="thumb" id="ideaThumb" hidden></div>
+        <div class="actions">
+          <button class="btn primary big" id="startBtn">▶ Starten</button>
+          <button class="btn" id="editBtn">Text bearbeiten</button>
+          <button class="btn danger" id="delBtn">Idee löschen</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<!-- Bearbeiten -->
+<main class="gutter" id="editView" hidden>
+  <div class="wrap page">
+    <button class="btn quiet back" id="editBack">← Zurück</button>
+    <form class="form" id="editForm" novalidate>
+      <div class="field">
+        <label for="fTitle">Titel</label>
+        <input type="text" id="fTitle" maxlength="120" placeholder="z. B. Meine Morgenroutine in 60 Sekunden" autocomplete="off">
+      </div>
+      <div class="field">
+        <span class="lbl">Thumbnail (optional)</span>
+        <div class="imgrow">
+          <label class="drop" for="fImage" id="drop">
+            <span id="dropText">Bild auswählen<br>JPG oder PNG</span>
+            <img id="dropImg" alt="" hidden>
+            <input type="file" id="fImage" accept="image/png,image/jpeg,image/webp,image/gif">
+          </label>
+          <button type="button" class="btn quiet" id="rmImage" hidden>Bild entfernen</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="fText">Sprechtext</label>
+        <textarea id="fText" placeholder="Schreib oder füg hier den Text ein, den du sprechen willst. Eine leere Zeile beginnt einen neuen Absatz."></textarea>
+        <p class="hint-s" id="fCount"></p>
+      </div>
+      <div class="formbar">
+        <button type="submit" class="btn primary big" id="saveBtn">Speichern</button>
+        <button type="button" class="btn" id="cancelBtn">Abbrechen</button>
+        <span class="msg" id="editMsg"></span>
+      </div>
+    </form>
+  </div>
+</main>
+
+<!-- Start-Auswahl -->
+<div class="dialog gutter" id="startDialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" hidden>
+  <div class="panel">
+    <div>
+      <h2 id="dlgTitle">Wie willst du ablesen?</h2>
+      <p class="sub">Du kannst die Ansicht im Teleprompter jederzeit wechseln.</p>
+    </div>
+    <div class="choices">
+      <button class="choice" data-v="klassisch">
+        <div class="mini" aria-hidden="true">
+          <i class="ln" style="top:22%;opacity:.35"></i><i class="ln" style="top:34%;right:28%"></i>
+          <i class="ln" style="top:46%"></i><i class="ln" style="top:58%;right:32%"></i><i class="ln" style="top:70%"></i>
+          <i class="mk" style="top:31%;left:2px;border-left:9px solid var(--tally)"></i>
+          <i class="mk" style="top:31%;right:2px;border-right:9px solid var(--tally)"></i>
+        </div>
+        <b>Klassisch</b>
+        <span>Großer Lauftext über den ganzen Bildschirm, rote Marke zeigt die Lesezeile.</span>
+        <em id="lastK" hidden>Zuletzt genutzt</em>
+      </button>
+      <button class="choice" data-v="kamera">
+        <div class="mini" aria-hidden="true">
+          <i class="cam"></i>
+          <i class="ln" style="top:22%;left:26%;right:26%;opacity:.5"></i><i class="ln" style="top:32%;left:24%;right:24%"></i>
+          <i class="ln" style="top:42%;left:28%;right:28%;opacity:.5"></i>
+        </div>
+        <b>Kamera-nah</b>
+        <span>Schmaler Streifen direkt unter der Kamera. Dein Blick wirkt wie in die Linse.</span>
+        <em id="lastC" hidden>Zuletzt genutzt</em>
+      </button>
+    </div>
+    <div class="foot"><button class="btn quiet" id="dlgClose">Abbrechen</button></div>
+  </div>
+</div>
+
+<!-- Tablet-Einstellungen (nur in der App) -->
+<div class="dialog gutter" id="adminDialog" role="dialog" aria-modal="true" aria-labelledby="admTitle" hidden>
+  <div class="panel">
+    <h2 id="admTitle">Tablet-Einstellungen</h2>
+    <div id="admPinStep" class="admgrid">
+      <p class="sub" id="admPinText">Gib deine PIN ein.</p>
+      <input type="password" inputmode="numeric" id="admPin" class="pin" maxlength="12" autocomplete="off" aria-label="PIN">
+      <input type="password" inputmode="numeric" id="admPin2" class="pin" maxlength="12" autocomplete="off" placeholder="PIN wiederholen" aria-label="PIN wiederholen" hidden>
+      <div class="formbar">
+        <button class="btn primary" id="admOk">Weiter</button>
+        <button class="btn" id="admCancel">Abbrechen</button>
+        <span class="msg" id="admMsg"></span>
+      </div>
+    </div>
+    <div id="admMenu" class="admgrid" hidden>
+      <button class="btn" id="admWifi">WLAN einstellen</button>
+      <button class="btn" id="admReload">Oberfläche neu laden</button>
+      <button class="btn" id="admKiosk">Sperre ausschalten</button>
+      <button class="btn" id="admNewPin">PIN ändern</button>
+      <button class="btn" id="admLogout" hidden>Vom Konto abmelden</button>
+      <button class="btn danger" id="admRelease">Tablet komplett freigeben</button>
+      <p class="meta" id="admInfo"></p>
+      <div class="foot"><button class="btn quiet" id="admClose">Schließen</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Teleprompter -->
+<section class="prompter" id="prompter" hidden>
+  <div class="pbar gutter">
+    <div class="pgroup">
+      <button class="btn quiet" id="pClose" title="Schließen (Esc)">← Zurück</button>
+      <span class="ptitle" id="pTitle"></span>
+    </div>
+    <div class="pgroup">
+      <button class="btn primary play" id="play">Start</button>
+      <button class="btn" id="reset" title="Anfang (R)">Anfang</button>
+    </div>
+    <div class="seg" role="group" aria-label="Ansicht">
+      <button data-v="klassisch" aria-pressed="false">Klassisch</button>
+      <button data-v="kamera" aria-pressed="false">Kamera-nah</button>
+    </div>
+    <div class="pgroup">
+      <label class="range" for="wpm">Tempo <input type="range" id="wpm" min="60" max="240" step="5"> <span class="val" id="wpmVal"></span> W/Min</label>
+      <label class="range" for="size">Größe <input type="range" id="size" min="24" max="110" step="2"> <span class="val" id="sizeVal"></span></label>
+    </div>
+    <div class="pgroup">
+      <button class="btn" id="mirror" aria-pressed="false" title="Für Teleprompter-Glas (M)">Spiegeln</button>
+      <button class="btn" id="fs" title="Vollbild (F)">Vollbild</button>
+      <label class="check" for="cdToggle"><input type="checkbox" id="cdToggle"> Countdown</label>
+    </div>
+    <span class="meta" id="pMeta"></span>
+    <span class="batt" id="pBatt" hidden></span>
+  </div>
+  <div class="stage" id="stage" data-v="klassisch">
+    <div class="camtag" id="camtag" hidden><i></i>Kamera hier</div>
+    <div class="view" id="view">
+      <div class="track" id="track"><div class="text gutter" id="text"></div></div>
+      <div class="fade-top" id="fadeTop"></div>
+      <div class="guide" id="guide"></div>
+    </div>
+    <p class="note gutter" id="note" hidden>Leg das iPhone <b>oben mittig</b> an den Bildschirmrand, mit der Linse direkt über dem Streifen.<br>Dann sieht dein Blick fast so aus, als würdest du in die Kamera schauen.</p>
+    <div class="countdown" id="countdown" hidden></div>
+    <p class="phint"><kbd>Leertaste</kbd> oder Tippen: Start/Pause · <kbd>↑</kbd><kbd>↓</kbd> Tempo · <kbd>←</kbd><kbd>→</kbd> springen · Ziehen/Mausrad: verschieben · <kbd>R</kbd> Anfang · <kbd>M</kbd> Spiegeln · <kbd>F</kbd> Vollbild · <kbd>Esc</kbd> zurück</p>
+    <div class="progress" aria-hidden="true"><span id="bar"></span></div>
+  </div>
+</section>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+const ls={
+  get(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+};
+const countWords=s=>(String(s||'').match(/\S+/g)||[]).length;
+const fmt=sec=>{sec=Math.round(sec);return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0')};
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+
+/* ---------- Hell / Dunkel ---------- */
+function applyLook(l){
+  const r=document.documentElement;
+  if(l==='light'||l==='dark')r.setAttribute('data-look',l);else{r.removeAttribute('data-look');l='auto'}
+  $$('.look button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.look===l)));
+  ls.set('prompter-look',l);
+}
+$$('.look button').forEach(b=>b.addEventListener('click',()=>applyLook(b.dataset.look)));
+applyLook(ls.get('prompter-look')||'auto');
+
+/* ---------- Einstellungen ---------- */
+const saved=ls.get('prompter-settings')||{};
+const S={wpm:saved.wpm||140,size:saved.size||48,mirror:!!saved.mirror,cd:saved.cd!==false,last:saved.last||''};
+function saveSettings(){ls.set('prompter-settings',{wpm:S.wpm,size:S.size,mirror:S.mirror,cd:S.cd,last:S.last})}
+const dur=t=>fmt(countWords(t)*60/S.wpm);
+
+/* ---------- Speicher: Konto (db + assets) oder dieser Browser ---------- */
+let ideas=[],mode='local',db=null,assets=null,loaded=false,current=null;
+const imgSrc=i=>i&&i.image?'/_blob/'+i.image:(i&&i.thumb)||'';
+const newId=()=>'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function sortIdeas(){ideas.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0))}
+
+/* ---------- Online-Speicher (Supabase) ----------
+   Anmeldung per E-Mail und Passwort, Daten nur für den eigenen Nutzer (Row Level Security).
+   Eine Kopie bleibt im Gerät, damit der Teleprompter auch ohne Internet läuft. */
+const SB={url:'https://ksvrltopmhiyoqoatjcm.supabase.co',key:'sb_publishable_7lFXV_QFQXi47tBXPGDFcA_ZT6h7l8Y'};
+const sb={
+  sess:ls.get('prompter-sb-session'),
+  async auth(body,grant){
+    let r;
+    try{r=await fetch(SB.url+'/auth/v1/token?grant_type='+grant,{method:'POST',headers:{apikey:SB.key,'Content-Type':'application/json'},body:JSON.stringify(body)})}
+    catch(e){throw {code:'offline'}}
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw {code:'auth',status:r.status,msg:j.error_description||j.msg||j.error||''};
+    this.sess={access:j.access_token,refresh:j.refresh_token,exp:Date.now()+((j.expires_in||3600)-60)*1000,email:j.user&&j.user.email||(this.sess&&this.sess.email)||''};
+    ls.set('prompter-sb-session',this.sess);return this.sess;
+  },
+  login(email,password){return this.auth({email,password},'password')},
+  logout(){this.sess=null;try{localStorage.removeItem('prompter-sb-session')}catch(e){}},
+  async token(){
+    if(!this.sess)throw {code:'nosession'};
+    if(Date.now()>this.sess.exp){
+      try{await this.auth({refresh_token:this.sess.refresh},'refresh_token')}
+      catch(e){if(e.code==='auth'){this.logout();throw {code:'nosession'}}throw e}
+    }
+    return this.sess.access;
+  },
+  async req(path,opt,retried){
+    opt=opt||{};
+    const t=await this.token();
+    let r;
+    try{r=await fetch(SB.url+'/rest/v1/'+path,{method:opt.method||'GET',body:opt.body,
+      headers:Object.assign({apikey:SB.key,Authorization:'Bearer '+t,'Content-Type':'application/json'},opt.headers||{})})}
+    catch(e){throw {code:'offline'}}
+    if(r.status===401&&!retried){this.sess.exp=0;return this.req(path,opt,true)}
+    if(!r.ok){const j=await r.json().catch(()=>({}));throw {code:'http',status:r.status,msg:j.message||''}}
+    if(r.status===204||(opt.method&&opt.method!=='GET'))return null;
+    return r.json();
+  }
+};
+const toRow=i=>({id:i.id,title:i.title||'',body:i.text||'',thumb:i.thumb||null,created_at:i.createdAt||Date.now(),updated_at:i.updatedAt||Date.now()});
+const fromRow=r=>({id:r.id,title:r.title,text:r.body,thumb:r.thumb||null,image:null,createdAt:+r.created_at,updatedAt:+r.updated_at});
+function setNote(t){$('#storeNote').textContent=t}
+function cacheIdeas(){if(!ls.set('prompter-cloud-cache',ideas))try{localStorage.removeItem('prompter-cloud-cache')}catch(e){}}
+const hhmm=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+let cloudBusy=false;
+async function cloudLoad(){
+  if(cloudBusy||!sb.sess)return;cloudBusy=true;
+  try{
+    /* Erst nur Kennungen und Zeitstempel holen, volle Zeilen nur für Geändertes */
+    const meta=await sb.req('ideas?select=id,updated_at');
+    const have=new Map(ideas.map(i=>[i.id,i]));
+    const changed=meta.filter(m=>{const c=have.get(m.id);return !c||+m.updated_at!==c.updatedAt}).map(m=>m.id);
+    let full=[];
+    for(let k=0;k<changed.length;k+=40){
+      const part=changed.slice(k,k+40).map(encodeURIComponent).join(',');
+      full=full.concat(await sb.req('ideas?select=id,title,body,thumb,created_at,updated_at&id=in.('+part+')'));
+    }
+    const keep=new Set(meta.map(m=>m.id));
+    const next=new Map(ideas.filter(i=>keep.has(i.id)).map(i=>[i.id,i]));
+    full.forEach(r=>next.set(r.id,fromRow(r)));
+    const before=ideas.length+':'+ideas.map(i=>i.updatedAt).join(',');
+    ideas=Array.from(next.values());sortIdeas();
+    const after=ideas.length+':'+ideas.map(i=>i.updatedAt).join(',');
+    if(before!==after){cacheIdeas();refresh()}
+    showAlert('');setNote('Synchronisiert · '+hhmm());
+  }catch(e){
+    if(e.code==='nosession'){setNote('Nicht angemeldet');refresh()}
+    else if(e.code==='offline')setNote('Offline · gespeicherter Stand');
+    else if(e.status===404)showAlert('Die Tabelle „ideas“ fehlt in Supabase. Führ das Einrichtungs-SQL aus.');
+    else setNote('Synchronisieren fehlgeschlagen');
+  }
+  cloudBusy=false;
+}
+async function doLogin(email,pw,msg,btn){
+  msg.textContent='';btn.disabled=true;btn.textContent='Meldet an …';
+  try{
+    await sb.login(email,pw);
+    /* Ideen, die vorher nur auf diesem Gerät lagen, einmalig hochladen */
+    const local=ls.get('prompter-ideas')||[];
+    if(local.length){
+      await sb.req('ideas',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(local.map(toRow))});
+      try{localStorage.removeItem('prompter-ideas')}catch(e){}
+    }
+    ideas=[];refresh();await cloudLoad();updateAccountUi();
+  }catch(e){
+    msg.textContent=e.code==='offline'?'Keine Internetverbindung.':e.code==='auth'?'E-Mail oder Passwort stimmt nicht.':'Anmelden hat nicht geklappt'+(e.msg?': '+e.msg:'.');
+  }
+  btn.disabled=false;btn.textContent='Anmelden';
+}
+function logout(){sb.logout();ideas=[];try{localStorage.removeItem('prompter-cloud-cache')}catch(e){}show('home');refresh();setNote('Nicht angemeldet');updateAccountUi()}
+function updateAccountUi(){
+  const on=mode==='cloud'&&!!sb.sess;
+  $('#logoutBtn').hidden=!on||!!window.AndroidKiosk;
+  const a=$('#admLogout');if(a)a.hidden=!on;
+  $('#newBtn').hidden=mode==='cloud'&&!sb.sess;
+}
+
+async function initStore(){
+  const c=window.claude;
+  if(c&&typeof c.use==='function'){
+    try{db=await c.use('db')}catch(e){db=null}
+    if(db){try{assets=await c.use('assets')}catch(e){assets=null}}
+  }
+  if(db){
+    mode='db';$('#storeNote').textContent='Gespeichert in deinem Konto';
+    const timer=setTimeout(()=>showAlert('Deine Ideen sind gerade nicht erreichbar. Prüf die Internetverbindung.'),10000);
+    db.collection('ideas').onSnapshot(snap=>{
+      if(!snap.metadata.fromCache){clearTimeout(timer);showAlert('')}
+      ideas=snap.docs.map(d=>Object.assign({},d.data(),{id:d.id}));
+      sortIdeas();loaded=true;refresh();
+    },err=>{
+      clearTimeout(timer);showAlert('Deine Ideen konnten nicht geladen werden ('+err.code+'). Lade die Seite später neu.');
+      loaded=true;refresh();
+    });
+  }else if(SB.url&&SB.key){
+    mode='cloud';
+    ideas=ls.get('prompter-cloud-cache')||[];sortIdeas();loaded=true;refresh();
+    if(sb.sess)cloudLoad();else setNote('Nicht angemeldet');
+    setInterval(()=>{if(document.visibilityState==='visible'&&P.hidden&&viewName!=='edit'&&sb.sess)cloudLoad()},20000);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&sb.sess)cloudLoad()});
+  }else{
+    mode='local';$('#storeNote').textContent=window.AndroidKiosk?'Auf diesem Tablet gespeichert':'Nur in diesem Browser gespeichert';
+    ideas=ls.get('prompter-ideas')||[];sortIdeas();loaded=true;refresh();
+    if(!window.AndroidKiosk){$('#exportBtn').hidden=false;$('#importBtn').hidden=false}
+  }
+}
+
+/* Sicherung (nur wenn im Browser gespeichert wird) */
+function flash(t){const n=$('#storeNote');n.textContent=t;clearTimeout(flash.t);flash.t=setTimeout(()=>{n.textContent='Nur in diesem Browser gespeichert'},4000)}
+$('#exportBtn').addEventListener('click',()=>{
+  const blob=new Blob([JSON.stringify({app:'prompter-werkstatt',version:1,exportedAt:new Date().toISOString(),ideas})],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='prompter-ideen-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);
+  flash('Sicherung gespeichert ('+ideas.length+' Ideen)');
+});
+$('#importBtn').addEventListener('click',()=>$('#importFile').click());
+$('#importFile').addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
+  try{
+    const data=JSON.parse(await f.text());
+    const list=Array.isArray(data)?data:data&&data.ideas;
+    if(!Array.isArray(list))throw new Error('format');
+    const map=new Map(ideas.map(i=>[i.id,i]));let n=0;
+    list.forEach(i=>{
+      if(!i||typeof i!=='object')return;
+      const id=typeof i.id==='string'&&i.id?i.id:newId();
+      const cur=map.get(id);
+      if(!cur||(i.updatedAt||0)>=(cur.updatedAt||0)){
+        map.set(id,{id,title:String(i.title||'Ohne Titel'),text:String(i.text||''),image:null,
+          thumb:typeof i.thumb==='string'&&i.thumb.startsWith('data:image/')?i.thumb:null,
+          createdAt:+i.createdAt||Date.now(),updatedAt:+i.updatedAt||Date.now()});n++;
+      }
+    });
+    const next=Array.from(map.values());
+    if(!ls.set('prompter-ideas',next)){showAlert('Der Speicher dieses Browsers ist zu voll für diese Sicherung.');return}
+    ideas=next;sortIdeas();refresh();showAlert('');flash(n+' Ideen geladen');
+  }catch(err){showAlert('Diese Datei ist keine Sicherung der Prompter Werkstatt.')}
+});
+function showAlert(t){const a=$('#loadAlert');a.textContent=t;a.hidden=!t}
+
+async function saveIdea(obj){
+  obj.updatedAt=Date.now();
+  if(mode==='db'){
+    const body=Object.assign({},obj);delete body.id;
+    await db.collection('ideas').doc(obj.id).set(body);
+  }else if(mode==='cloud'){
+    try{await sb.req('ideas',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([toRow(obj)])})}
+    catch(e){throw {code:e.code==='offline'?'cloud_offline':e.code==='nosession'?'cloud_login':'cloud'}}
+    const i=ideas.findIndex(x=>x.id===obj.id);
+    if(i>=0)ideas[i]=obj;else ideas.push(obj);
+    sortIdeas();cacheIdeas();refresh();setNote('Synchronisiert · '+hhmm());
+  }else{
+    const i=ideas.findIndex(x=>x.id===obj.id);
+    const next=ideas.slice();if(i>=0)next[i]=obj;else next.push(obj);
+    if(!ls.set('prompter-ideas',next))throw {code:'local_full'};
+    ideas=next;sortIdeas();refresh();
+  }
+}
+async function removeIdea(obj){
+  if(mode==='db'){
+    await db.collection('ideas').doc(obj.id).delete();
+    if(obj.image&&assets)assets.delete(obj.image).catch(()=>{});
+  }else if(mode==='cloud'){
+    await sb.req('ideas?id=eq.'+encodeURIComponent(obj.id),{method:'DELETE',headers:{Prefer:'return=minimal'}});
+    ideas=ideas.filter(x=>x.id!==obj.id);cacheIdeas();refresh();
+  }else{
+    ideas=ideas.filter(x=>x.id!==obj.id);ls.set('prompter-ideas',ideas);refresh();
+  }
+}
+
+/* ---------- Ansichten ---------- */
+let viewName='home';
+function show(v){
+  viewName=v;
+  $('#homeView').hidden=v!=='home';$('#ideaView').hidden=v!=='idea';$('#editView').hidden=v!=='edit';
+  window.scrollTo(0,0);
+}
+function refresh(){
+  renderHome();
+  if(viewName==='idea'){if(byId(current))renderIdea();else show('home')}
+}
+const byId=id=>ideas.find(x=>x.id===id);
+
+function thumbInto(box,idea){
+  box.innerHTML='';
+  const src=imgSrc(idea);
+  if(src){const img=el('img');img.alt='';img.src=src;img.loading='lazy';img.onerror=()=>{img.remove();box.appendChild(placeholder())};box.appendChild(img)}
+  else box.appendChild(placeholder());
+}
+function placeholder(){const p=el('div','ph');p.setAttribute('aria-hidden','true');p.append(el('i'),el('i','mark'),el('i'),el('i'));return p}
+
+function renderHome(){
+  const g=$('#grid');g.innerHTML='';
+  if(!loaded){g.appendChild(el('p','loading','Deine Ideen werden geladen …'));return}
+  updateAccountUi();
+  if(mode==='cloud'&&!sb.sess){
+    const f=el('form','empty login');f.noValidate=true;
+    const em=el('input');em.type='email';em.id='lEmail';em.placeholder='E-Mail';em.autocomplete='username';
+    const pw=el('input');pw.type='password';pw.id='lPw';pw.placeholder='Passwort';pw.autocomplete='current-password';
+    const b=el('button','btn primary big','Anmelden');b.type='submit';
+    const m=el('p','msg');
+    f.append(el('h2',null,'Anmelden'),el('p',null,'Melde dich mit deinem Teleprompter-Konto an. Danach sind deine Ideen auf Tablet, PC und Handy gleich.'),em,pw,b,m);
+    f.addEventListener('submit',e=>{e.preventDefault();if(!em.value.trim()||!pw.value){m.textContent='Gib E-Mail und Passwort ein.';return}doLogin(em.value.trim(),pw.value,m,b)});
+    g.appendChild(f);return;
+  }
+  if(!ideas.length){
+    const e=el('div','empty');
+    e.append(el('h2',null,'Noch keine Idee'),el('p',null,'Leg deine erste Idee an: einen Titel, den Text, den du sprechen willst, und wenn du magst ein Thumbnail. Danach startest du sie direkt im Teleprompter.'));
+    const b=el('button','btn primary','+ Erste Idee anlegen');b.addEventListener('click',()=>openEdit(null));e.appendChild(b);
+    g.appendChild(e);return;
+  }
+  ideas.forEach(i=>{
+    const c=el('button','card');c.type='button';
+    const t=el('div','thumb');thumbInto(t,i);
+    const body=el('div','body');
+    body.append(el('h3',null,i.title||'Ohne Titel'),el('p',null,(i.text||'').trim()||'Noch kein Text'));
+    const w=countWords(i.text);
+    body.appendChild(el('span','meta',w+' Wörter · ca. '+dur(i.text)+' Min.'));
+    c.append(t,body);
+    c.addEventListener('click',()=>openIdea(i.id));
+    g.appendChild(c);
+  });
+}
+
+function openIdea(id){current=id;disarmDelete();renderIdea();show('idea')}
+function renderIdea(){
+  const i=byId(current);if(!i)return;
+  $('#ideaTitle').textContent=i.title||'Ohne Titel';
+  const w=countWords(i.text);
+  $('#ideaMeta').textContent=w+' Wörter · ca. '+dur(i.text)+' Min. bei '+S.wpm+' Wörtern pro Minute';
+  const box=$('#ideaText');box.innerHTML='';
+  const paras=String(i.text||'').split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean);
+  if(!paras.length)box.appendChild(el('p','none','Diese Idee hat noch keinen Text. Klick auf „Text bearbeiten“.'));
+  paras.forEach(p=>box.appendChild(el('p',null,p)));
+  const th=$('#ideaThumb');
+  if(imgSrc(i)){th.hidden=false;thumbInto(th,i)}else{th.hidden=true;th.innerHTML=''}
+  $('#startBtn').disabled=!w;
+}
+
+/* Löschen mit Bestätigung im Knopf */
+let delTimer=null;
+function disarmDelete(){const b=$('#delBtn');b.classList.remove('armed');b.textContent='Idee löschen';clearTimeout(delTimer)}
+$('#delBtn').addEventListener('click',async()=>{
+  const b=$('#delBtn');
+  if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Wirklich löschen? Nochmal klicken';delTimer=setTimeout(disarmDelete,4000);return}
+  disarmDelete();const i=byId(current);if(!i)return;
+  b.disabled=true;
+  try{await removeIdea(i);show('home')}catch(e){b.textContent='Löschen fehlgeschlagen'}
+  b.disabled=false;
+});
+
+/* ---------- Bearbeiten ---------- */
+let edit=null;
+function openEdit(id){
+  const i=id?byId(id):null;
+  edit={id:i?i.id:null,blob:null,remove:false,url:null};
+  $('#fTitle').value=i?i.title||'':'';
+  $('#fText').value=i?i.text||'':'';
+  $('#editMsg').textContent='';
+  setPreview(i?imgSrc(i):'');
+  updateCount();
+  $('#editBack').textContent=i?'← Zurück zur Idee':'← Alle Ideen';
+  show('edit');
+  (i?$('#fText'):$('#fTitle')).focus();
+}
+function setPreview(src){
+  const img=$('#dropImg');
+  if(src){img.src=src;img.hidden=false;$('#dropText').hidden=true;$('#rmImage').hidden=false}
+  else{img.removeAttribute('src');img.hidden=true;$('#dropText').hidden=false;$('#rmImage').hidden=true}
+}
+function updateCount(){const t=$('#fText').value;const w=countWords(t);$('#fCount').textContent=w?w+' Wörter · ca. '+dur(t)+' Min. Sprechzeit':''}
+$('#fText').addEventListener('input',updateCount);
+
+function loadImage(file){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file);const img=new Image();
+    img.onload=()=>{res(img);setTimeout(()=>URL.revokeObjectURL(url),1000)};
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('decode'))};
+    img.src=url;
+  });
+}
+function scaled(img,max){
+  const r=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*r);c.height=Math.round(img.naturalHeight*r);
+  const x=c.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);return c;
+}
+const toBlob=(c,q)=>new Promise(r=>c.toBlob(r,'image/jpeg',q));
+
+$('#fImage').addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
+  $('#editMsg').textContent='';
+  try{
+    const img=await loadImage(f);
+    edit.img=img;edit.blob=await toBlob(scaled(img,1280),.85);edit.remove=false;
+    if(edit.url)URL.revokeObjectURL(edit.url);
+    edit.url=URL.createObjectURL(edit.blob);setPreview(edit.url);
+  }catch(err){$('#editMsg').textContent='Dieses Bild kann der Browser nicht lesen. Nimm bitte ein JPG oder PNG.'}
+});
+$('#rmImage').addEventListener('click',()=>{edit.blob=null;edit.img=null;edit.remove=true;setPreview('')});
+
+function leaveEdit(){if(edit&&edit.url)URL.revokeObjectURL(edit.url);const id=edit&&edit.id;edit=null;if(id&&byId(id))openIdea(id);else show('home')}
+$('#cancelBtn').addEventListener('click',leaveEdit);
+$('#editBack').addEventListener('click',leaveEdit);
+
+$('#editForm').addEventListener('submit',async e=>{
+  e.preventDefault();if(!edit)return;
+  const title=$('#fTitle').value.trim(),text=$('#fText').value.replace(/\s+$/,'');
+  if(!title&&!text.trim()){$('#editMsg').textContent='Gib mindestens einen Titel oder einen Text ein.';return}
+  const btn=$('#saveBtn');btn.disabled=true;btn.textContent='Speichert …';$('#editMsg').textContent='';
+  const old=edit.id?byId(edit.id):null;
+  const obj={id:edit.id||newId(),title:title||'Ohne Titel',text,image:old?old.image||null:null,thumb:old?old.thumb||null:null,createdAt:old?old.createdAt||Date.now():Date.now()};
+  let oldAsset=null;
+  try{
+    if(edit.blob){
+      let done=false;
+      if(assets){
+        try{const r=await assets.upload(edit.blob,{type:'image/jpeg'});oldAsset=obj.image;obj.image=r.id;obj.thumb=null;done=true}catch(err){}
+      }
+      if(!done){
+        let c=scaled(edit.img,640),d=c.toDataURL('image/jpeg',.72);
+        if(d.length>180000){c=scaled(edit.img,420);d=c.toDataURL('image/jpeg',.62)}
+        oldAsset=obj.image;obj.image=null;obj.thumb=d;
+      }
+    }else if(edit.remove){oldAsset=obj.image;obj.image=null;obj.thumb=null}
+    await saveIdea(obj);
+    if(oldAsset&&assets&&oldAsset!==obj.image)assets.delete(oldAsset).catch(()=>{});
+    if(edit.url)URL.revokeObjectURL(edit.url);
+    edit=null;current=obj.id;
+    if(mode==='db'&&!byId(obj.id)){ideas.push(obj);sortIdeas()}
+    openIdea(obj.id);
+  }catch(err){
+    $('#editMsg').textContent=err&&err.code==='cloud_offline'?'Keine Internetverbindung. Dein Text ist noch hier im Feld, versuch es gleich nochmal.'
+      :err&&err.code==='cloud_login'?'Du bist nicht mehr angemeldet. Kopier deinen Text und melde dich neu an.'
+      :err&&err.code==='local_full'
+      ?'Der Speicher dieses Browsers ist voll. Nimm ein kleineres Bild oder lösche alte Ideen.'
+      :err&&err.code==='quota_exceeded'?'Dein Speicher für Ideen ist voll. Lösch ein paar alte Ideen.'
+      :'Speichern hat nicht geklappt. Versuch es gleich nochmal.';
+  }
+  btn.disabled=false;btn.textContent='Speichern';
+});
+
+$('#newBtn').addEventListener('click',()=>openEdit(null));
+$('#editBtn').addEventListener('click',()=>openEdit(current));
+$('#homeBtn').addEventListener('click',()=>{if(!$('#prompter').hidden)return;show('home')});
+$$('[data-go="home"]').forEach(b=>b.addEventListener('click',()=>show('home')));
+
+/* ---------- Start-Auswahl ---------- */
+const dlg=$('#startDialog');
+function openDialog(){
+  $('#lastK').hidden=S.last!=='klassisch';$('#lastC').hidden=S.last!=='kamera';
+  dlg.hidden=false;document.body.classList.add('locked');
+  const pref=dlg.querySelector('.choice[data-v="'+(S.last||'klassisch')+'"]');pref&&pref.focus();
+}
+function closeDialog(){dlg.hidden=true;if($('#prompter').hidden)document.body.classList.remove('locked')}
+$('#startBtn').addEventListener('click',openDialog);
+$('#dlgClose').addEventListener('click',closeDialog);
+dlg.addEventListener('click',e=>{if(e.target===dlg)closeDialog()});
+$$('.choice').forEach(b=>b.addEventListener('click',()=>{closeDialog();openPrompter(b.dataset.v)}));
+
+/* ---------- Teleprompter ---------- */
+const P=$('#prompter'),stage=$('#stage'),view=$('#view'),track=$('#track'),textEl=$('#text'),guide=$('#guide'),fadeTop=$('#fadeTop'),
+  cd=$('#countdown'),bar=$('#bar'),playBtn=$('#play');
+const st={variant:'klassisch',playing:false,counting:false,offset:0,timer:null,total:1};
+
+function lineH(){const v=parseFloat(getComputedStyle(textEl).lineHeight);return isNaN(v)?S.size*1.35:v}
+function maxOff(){return Math.max(0,textEl.offsetHeight-lineH())}
+function clamp(v){return Math.min(maxOff(),Math.max(0,v))}
+
+function openPrompter(v){
+  const i=byId(current);if(!i)return;
+  $('#pTitle').textContent=i.title||'';
+  textEl.innerHTML='';
+  String(i.text||'').split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean).forEach(p=>textEl.appendChild(el('p',null,p)));
+  st.total=Math.max(1,countWords(i.text));st.offset=0;
+  P.hidden=false;document.body.classList.add('locked');
+  setVariant(v);updatePMeta();
+  requestAnimationFrame(layout);
+}
+function closePrompter(){
+  pause();
+  try{if(document.fullscreenElement){const p=document.exitFullscreen();p&&p.catch&&p.catch(()=>{})}}catch(e){}
+  P.hidden=true;document.body.classList.remove('locked');
+}
+$('#pClose').addEventListener('click',closePrompter);
+
+function setVariant(v){
+  if(v!=='kamera')v='klassisch';
+  st.variant=v;stage.dataset.v=v;S.last=v;saveSettings();
+  $('#note').hidden=v!=='kamera';$('#camtag').hidden=v!=='kamera';
+  $$('.seg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===v)));
+  requestAnimationFrame(layout);
+}
+$$('.seg button').forEach(b=>b.addEventListener('click',()=>setVariant(b.dataset.v)));
+
+function layout(){
+  if(P.hidden)return;
+  /* Beim Drehen bricht der Text neu um: Leseposition anteilig mitnehmen */
+  const w=textEl.clientWidth;
+  if(st.w&&w&&w!==st.w)st.offset=(st.ratio||0)*maxOff();
+  st.w=w;
+  const gy=view.clientHeight*(st.variant==='kamera'?0.5:0.38);
+  guide.style.top=gy+'px';
+  fadeTop.style.height=Math.max(0,gy-lineH()*0.6)+'px';
+  track.style.transform='translate3d(0,'+(gy-lineH()/2-st.offset)+'px,0)';
+  const m=maxOff();st.ratio=m?st.offset/m:0;bar.style.width=(st.ratio*100).toFixed(2)+'%';
+}
+function updatePMeta(){$('#pMeta').textContent=st.total+' Wörter · ca. '+fmt(st.total*60/S.wpm)+' Min.'}
+
+function setWpm(v){S.wpm=Math.max(60,Math.min(240,v));$('#wpm').value=S.wpm;$('#wpmVal').textContent=S.wpm;updatePMeta();saveSettings()}
+function setSize(v){
+  const m=maxOff(),r=m?st.offset/m:0;
+  S.size=v;document.documentElement.style.setProperty('--size',v+'px');$('#size').value=v;$('#sizeVal').textContent=v;
+  st.offset=r*maxOff();layout();saveSettings();
+}
+function setMirror(on){S.mirror=on;stage.classList.toggle('mirror',on);$('#mirror').setAttribute('aria-pressed',String(on));saveSettings()}
+
+let wl=null;
+async function wake(){try{if(navigator.wakeLock)wl=await navigator.wakeLock.request('screen')}catch(e){wl=null}}
+function unwake(){try{wl&&wl.release()}catch(e){}wl=null}
+
+function play(){
+  if(st.playing||st.counting)return;
+  if(st.offset>=maxOff()-1)st.offset=0;
+  if(st.offset<1&&S.cd){
+    st.counting=true;P.classList.add('playing');playBtn.textContent='Pause';
+    let n=3;cd.textContent=n;cd.hidden=false;
+    st.timer=setInterval(()=>{n--;if(n<=0){clearInterval(st.timer);cd.hidden=true;st.counting=false;start()}else cd.textContent=n},800);
+  }else start();
+}
+function start(){st.playing=true;P.classList.add('playing');playBtn.textContent='Pause';wake()}
+function pause(){
+  if(st.counting){clearInterval(st.timer);cd.hidden=true;st.counting=false}
+  st.playing=false;P.classList.remove('playing');playBtn.textContent='Start';unwake();
+}
+function toggle(){(st.playing||st.counting)?pause():play()}
+function reset(){pause();st.offset=0;layout()}
+function jump(d){st.offset=clamp(st.offset+d*lineH()*2);layout()}
+
+let last=performance.now();
+function loop(t){
+  const dt=Math.min(0.1,(t-last)/1000);last=t;
+  if(st.playing&&!P.hidden){
+    st.offset+=(S.wpm/60)*(textEl.offsetHeight/st.total)*dt;
+    if(st.offset>=maxOff()){st.offset=maxOff();pause()}
+    layout();
+  }
+  requestAnimationFrame(loop);
+}
+
+playBtn.addEventListener('click',toggle);
+$('#reset').addEventListener('click',reset);
+$('#wpm').addEventListener('input',e=>setWpm(+e.target.value));
+$('#size').addEventListener('input',e=>setSize(+e.target.value));
+$('#mirror').addEventListener('click',()=>setMirror(!S.mirror));
+$('#cdToggle').addEventListener('change',e=>{S.cd=e.target.checked;saveSettings()});
+function fullscreen(){
+  try{
+    if(document.fullscreenElement){const p=document.exitFullscreen();p&&p.catch&&p.catch(()=>{})}
+    else if(stage.requestFullscreen){const p=stage.requestFullscreen();p&&p.catch&&p.catch(()=>{})}
+  }catch(e){}
+}
+$('#fs').addEventListener('click',fullscreen);
+document.addEventListener('fullscreenchange',()=>requestAnimationFrame(layout));
+
+stage.addEventListener('wheel',e=>{e.preventDefault();st.offset=clamp(st.offset+e.deltaY*0.6);layout()},{passive:false});
+let drag=null;
+stage.addEventListener('pointerdown',e=>{drag={y:e.clientY,x:e.clientX,start:st.offset,moved:false};try{stage.setPointerCapture(e.pointerId)}catch(err){}});
+stage.addEventListener('pointermove',e=>{
+  if(!drag)return;const dy=e.clientY-drag.y;
+  if(Math.abs(dy)>6||Math.abs(e.clientX-drag.x)>6)drag.moved=true;
+  if(drag.moved){st.offset=clamp(drag.start-dy);layout()}
+});
+stage.addEventListener('pointerup',()=>{if(drag&&!drag.moved)toggle();drag=null});
+stage.addEventListener('pointercancel',()=>{drag=null});
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if(!dlg.hidden){closeDialog();return}
+    if(!P.hidden&&!document.fullscreenElement){closePrompter();return}
+  }
+  if(P.hidden)return;
+  const t=e.target;
+  if(t.matches&&t.matches('input[type="range"]')&&e.key.startsWith('Arrow'))return;
+  const k=e.key;
+  if(k===' '||k==='Spacebar'){e.preventDefault();if(t.blur&&t!==document.body)t.blur();toggle()}
+  else if(k==='ArrowUp'){e.preventDefault();setWpm(S.wpm+5)}
+  else if(k==='ArrowDown'){e.preventDefault();setWpm(S.wpm-5)}
+  else if(k==='ArrowRight'){e.preventDefault();jump(1)}
+  else if(k==='ArrowLeft'){e.preventDefault();jump(-1)}
+  else if(k==='r'||k==='R')reset();
+  else if(k==='m'||k==='M')setMirror(!S.mirror);
+  else if(k==='f'||k==='F')fullscreen();
+});
+
+if(window.ResizeObserver)new ResizeObserver(()=>layout()).observe(stage);
+else window.addEventListener('resize',layout);
+window.addEventListener('orientationchange',()=>setTimeout(layout,200));
+
+/* ---------- Tablet-App: Einstellungen mit PIN, Zurück-Taste ---------- */
+const APP=window.AndroidKiosk||null;
+const adm=$('#adminDialog');
+let admPin='',admMode='enter',relTimer=null;
+function admMsg(t){$('#admMsg').textContent=t||''}
+function openAdmin(){
+  admPin='';admMsg('');$('#admPin').value='';$('#admPin2').value='';
+  if(!APP.hasPin()){admMode='create';$('#admPinText').textContent='Leg zuerst eine PIN fest (mindestens 4 Ziffern). Mit ihr kommst du später in diese Einstellungen.';$('#admPin2').hidden=false}
+  else{admMode='enter';$('#admPinText').textContent='Gib deine PIN ein.';$('#admPin2').hidden=true}
+  $('#admPinStep').hidden=false;$('#admMenu').hidden=true;
+  adm.hidden=false;document.body.classList.add('locked');
+  setTimeout(()=>$('#admPin').focus(),60);
+}
+function closeAdmin(){adm.hidden=true;admPin='';if(P.hidden&&dlg.hidden)document.body.classList.remove('locked')}
+function showMenu(note){
+  $('#admPinStep').hidden=true;$('#admMenu').hidden=false;
+  const owner=APP.isOwner(),kiosk=APP.isKiosk();
+  $('#admKiosk').textContent=kiosk?'Sperre ausschalten':'Sperre einschalten';
+  $('#admKiosk').disabled=!owner;$('#admRelease').disabled=!owner;
+  $('#admRelease').classList.remove('armed');$('#admRelease').textContent='Tablet komplett freigeben';
+  $('#admInfo').textContent=(note?note+' · ':'')+APP.info()+' · '+(owner?(kiosk?'Gesperrt auf Teleprompter':'Sperre aus'):'Ohne Geräteverwaltung');
+}
+function admSubmit(){
+  const p=$('#admPin').value.trim();
+  if(admMode==='enter'){
+    if(APP.checkPin(p)){admPin=p;showMenu()}else{admMsg('Falsche PIN.');$('#admPin').value=''}
+    return;
+  }
+  if(!/^\d{4,12}$/.test(p)){admMsg('Bitte 4 bis 12 Ziffern.');return}
+  if(p!==$('#admPin2').value.trim()){admMsg('Die beiden PINs sind nicht gleich.');return}
+  if(APP.setPin(admPin,p)){admPin=p;showMenu('PIN gespeichert')}else admMsg('PIN konnte nicht gespeichert werden.');
+}
+if(APP){
+  $('#adminBtn').hidden=false;$('#fs').hidden=true;
+  const imgField=$('#drop').closest('.field');if(imgField)imgField.hidden=true;
+  $('#adminBtn').addEventListener('click',openAdmin);
+  $('#admOk').addEventListener('click',admSubmit);
+  $('#admPin').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();if(admMode==='enter')admSubmit();else $('#admPin2').focus()}});
+  $('#admPin2').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();admSubmit()}});
+  $('#admCancel').addEventListener('click',closeAdmin);
+  $('#admClose').addEventListener('click',closeAdmin);
+  $('#admWifi').addEventListener('click',()=>{APP.openWifi(admPin);closeAdmin()});
+  $('#admReload').addEventListener('click',()=>APP.reload());
+  $('#admKiosk').addEventListener('click',()=>{APP.setKiosk(admPin,!APP.isKiosk());setTimeout(()=>showMenu(),400)});
+  $('#admNewPin').addEventListener('click',()=>{
+    admMode='change';admMsg('');$('#admPin').value='';$('#admPin2').value='';$('#admPin2').hidden=false;
+    $('#admPinText').textContent='Neue PIN festlegen (4 bis 12 Ziffern).';
+    $('#admMenu').hidden=true;$('#admPinStep').hidden=false;setTimeout(()=>$('#admPin').focus(),60);
+  });
+  $('#admRelease').addEventListener('click',()=>{
+    const b=$('#admRelease');
+    if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Wirklich? Danach ist das Tablet wieder ein normales Android. Nochmal tippen';clearTimeout(relTimer);relTimer=setTimeout(()=>showMenu(),5000);return}
+    APP.releaseDevice(admPin);closeAdmin();
+  });
+  adm.addEventListener('click',e=>{if(e.target===adm)closeAdmin()});
+}
+$('#logoutBtn').addEventListener('click',logout);
+if(APP)$('#admLogout').addEventListener('click',()=>{logout();closeAdmin()});
+
+/* Akkustand (nur in der Tablet-App) */
+function renderBatt(box,b){
+  box.hidden=false;box.innerHTML='';
+  box.className='batt'+(b.charging?' charging':b.level<=20?' low':'');
+  const i=el('i');const f=el('b');f.style.width=Math.max(2,Math.round(b.level*0.19))+'px';i.appendChild(f);
+  box.append(i,el('span',null,(b.charging?'⚡':'')+b.level+' %'));
+  box.title=b.charging?'Lädt':'Akku';
+}
+function updateBatt(){
+  if(!APP||!APP.battery)return;
+  let b;try{b=JSON.parse(APP.battery())}catch(e){return}
+  if(!b||b.level<0)return;
+  renderBatt($('#batt'),b);renderBatt($('#pBatt'),b);
+}
+if(APP){updateBatt();setInterval(updateBatt,30000)}
+
+window.kioskBack=function(){
+  if(!adm.hidden){closeAdmin();return}
+  if(!dlg.hidden){closeDialog();return}
+  if(!P.hidden){closePrompter();return}
+  if(viewName==='edit'){leaveEdit();return}
+  if(viewName==='idea'){show('home')}
+};
+
+/* ---------- Start ---------- */
+$('#cdToggle').checked=S.cd;
+setWpm(S.wpm);
+document.documentElement.style.setProperty('--size',S.size+'px');$('#size').value=S.size;$('#sizeVal').textContent=S.size;
+setMirror(S.mirror);
+renderHome();
+initStore();
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layout);
+requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
